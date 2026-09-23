@@ -27,7 +27,8 @@ class BaseConnector:
         "手机壳", "保护套", "钢化膜", "水凝膜", "贴膜", "防窥膜", 
         "镜头膜", "保护壳", "防摔壳", "转接头", "数据线", "充电器", 
         "耳机包", "防尘塞", "收纳盒", "支架", "定金", "专拍", "补差价", 
-        "样品", "配件", "体验装", "零件"
+        "样品", "配件", "体验装", "零件", "内胆包", "快充线", "抗菌壳",
+        "支点壳", "磁吸壳", "素皮壳", "保护膜", "壳", "膜", "套", "线"
     ]
 
     # Tracking parameters to strip from URLs
@@ -55,19 +56,19 @@ class BaseConnector:
     def is_accessory_trap(self, title: str, query: str) -> bool:
         """
         Check if the item is an accessory trick.
-        If user explicitly asks for '手机壳' or '膜', don't filter.
+        If user explicitly asks for '壳' or '膜', don't filter.
         Otherwise, if the user searched for a main device, filter out accessories.
         """
         query_lower = query.lower()
         title_lower = title.lower()
 
         # If user intentionally searched for an accessory, do not drop
-        for trap in self.ACCESSORY_TRAPS:
+        for trap in ["壳", "膜", "套", "线", "包", "支架", "充电器"]:
             if trap in query_lower:
                 return False
 
         # If query seems to be a main product (e.g. phone, pad, camera, appliance)
-        main_indicators = ["iphone", "ipad", "手机", "相机", "显卡", "笔记本", "电视", "冰箱", "洗衣机", "耳机", "手表", "音箱"]
+        main_indicators = ["iphone", "ipad", "手机", "相机", "显卡", "笔记本", "电视", "冰箱", "洗衣机", "耳机", "手表", "音箱", "air", "pro"]
         is_query_main_device = any(ind in query_lower for ind in main_indicators)
         
         if is_query_main_device:

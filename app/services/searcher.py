@@ -1,29 +1,27 @@
 import asyncio
 from typing import List, Dict, Any, Optional
+from urllib.parse import quote
 from app.connectors.base import SearchResult
+from app.connectors.smzdm import SMZDMConnector
+from app.connectors.mmb import MMBConnector
 from app.connectors.jd import JDConnector
 from app.connectors.taobao import TaobaoConnector
 from app.connectors.pdd import PDDConnector
 
 class SearchService:
     def __init__(self):
-        self.connectors = {
-            "jd": JDConnector(),
-            "taobao": TaobaoConnector(),
-            "pdd": PDDConnector()
-        }
+        self.smzdm = SMZDMConnector()
+        self.mmb = MMBConnector()
+        self.jd = JDConnector()
+        self.taobao = TaobaoConnector()
+        self.pdd = PDDConnector()
 
     async def search_all(
         self, 
         query: str, 
         platforms: Optional[List[str]] = None,
-        limit_per_platform: int = 8
+        limit_per_platform: int = 15
     ) -> Dict[str, Any]:
-        """
-        Search across all specified platforms in parallel,
-        clean out marketing tricks/accessories, calculate true final price,
-        and sort from lowest to highest.
-        """
         clean_kw = query.strip()
         if not clean_kw:
             return {
@@ -33,47 +31,78 @@ class SearchService:
                 "max_price": 0.0,
                 "max_savings": 0.0,
                 "items": [],
-                "platform_counts": {}
+                "platform_counts": {},
+                "direct_channels": []
             }
 
-        selected_connectors = []
-        target_keys = platforms or ["jd", "taobao", "pdd"]
-        for key in target_keys:
-            if key in self.connectors:
-                selected_connectors.append(self.connectors[key])
+        # 1. Concurrently query real price sources
+        tasks = [
+            self.smzdm.search(clean_kw, limit=limit_per_platform),
+            self.mmb.search(clean_kw, limit=limit_per_platform),
+            self.jd.search(clean_kw, limit=5),
+            self.taobao.search(clean_kw, limit=5),
+            self.pdd.search(clean_kw, limit=5)
+        ]
 
-        # Concurrent async search across all platforms
-        tasks = [c.search(clean_kw, limit=limit_per_platform) for c in selected_connectors]
         raw_results = await asyncio.gather(*tasks, return_exceptions=True)
 
         all_items: List[SearchResult] = []
-        platform_counts: Dict[str, int] = {}
+        platform_counts: Dict[str, int] = {"jd": 0, "taobao": 0, "pdd": 0, "other": 0}
 
-        for connector, result in zip(selected_connectors, raw_results):
-            p_key = connector.platform_key
-            if isinstance(result, list):
-                all_items.extend(result)
-                platform_counts[p_key] = len(result)
-            else:
-                platform_counts[p_key] = 0
-                print(f"[SearchService] Platform {p_key} search encountered error: {result}")
+        # Deduplication tracker by normalized title
+        seen_titles = set()
 
-        # If zero items found online (e.g. strict anti-bot or offline network), provide high-fidelity normalized candidates
-        if not all_items:
-            all_items = self._generate_fallback_candidates(clean_kw)
-            for item in all_items:
-                platform_counts[item.platform_key] = platform_counts.get(item.platform_key, 0) + 1
+        for res in raw_results:
+            if isinstance(res, list):
+                for item in res:
+                    if item.final_price <= 0:
+                        continue
+                    # Deduplicate closely matching titles
+                    norm_title = "".join(item.title.split())[:25].lower()
+                    if norm_title in seen_titles:
+                        continue
+                    seen_titles.add(norm_title)
 
-        # Sort items strictly by final_price ascending (cheapest first)
+                    # Filter by requested platforms if specified
+                    if platforms:
+                        # Allow matching if platform_key is in requested platforms
+                        if item.platform_key not in platforms and "other" not in platforms:
+                            # If user selected jd and item is jd
+                            continue
+
+                    all_items.append(item)
+                    key = item.platform_key if item.platform_key in platform_counts else "other"
+                    platform_counts[key] = platform_counts.get(key, 0) + 1
+
+        # Sort strictly by final price ascending (cheapest first)
         all_items.sort(key=lambda x: (x.final_price, not x.is_official))
 
-        # Mark lowest price item and calculate savings
         min_price = all_items[0].final_price if all_items else 0.0
         max_price = max((it.final_price for it in all_items), default=0.0)
         max_savings = round(max(0.0, max_price - min_price), 2)
 
         if all_items:
             all_items[0].is_lowest = True
+
+        # Generate official direct channels for quick jump
+        enc = quote(clean_kw)
+        direct_channels = [
+            {
+                "platform": "京东自营",
+                "tag": "自营官方检索通道",
+                "url": f"https://search.jd.com/Search?keyword={enc}&enc=utf-8"
+            },
+            {
+                "platform": "天猫官方",
+                "tag": "品牌官方旗舰店通道",
+                "url": f"https://s.taobao.com/search?q={enc}"
+            },
+            {
+                "platform": "拼多多百亿补贴",
+                "tag": "百亿补贴品牌通道",
+                "url": f"https://mobile.yangkeduo.com/search_result.html?search_key={enc}"
+            }
+        ]
 
         return {
             "query": clean_kw,
@@ -82,6 +111,7 @@ class SearchService:
             "max_price": max_price,
             "max_savings": max_savings,
             "platform_counts": platform_counts,
+            "direct_channels": direct_channels,
             "items": [self._serialize_result(item) for item in all_items]
         }
 
@@ -100,52 +130,3 @@ class SearchService:
             "is_official": item.is_official,
             "is_lowest": item.is_lowest
         }
-
-    def _generate_fallback_candidates(self, query: str) -> List[SearchResult]:
-        """
-        Graceful candidate generator when public search is challenged by IP rate-limiting,
-        providing immediate search links and guidance.
-        """
-        from urllib.parse import quote
-        enc = quote(query)
-        return [
-            SearchResult(
-                title=f"{query} (京东官方自营检索通道)",
-                platform="京东",
-                platform_key="jd",
-                item_id="jd_search",
-                price=0.0,
-                final_price=0.0,
-                discount_tag="自营保障 / 点击直接前往对比",
-                url=f"https://search.jd.com/Search?keyword={enc}&enc=utf-8",
-                image_url="",
-                shop_name="京东自营",
-                is_official=True
-            ),
-            SearchResult(
-                title=f"{query} (天猫官方旗舰店通道)",
-                platform="天猫",
-                platform_key="taobao",
-                item_id="tb_search",
-                price=0.0,
-                final_price=0.0,
-                discount_tag="品牌官旗 / 点击直接前往对比",
-                url=f"https://s.taobao.com/search?q={enc}",
-                image_url="",
-                shop_name="天猫官方旗舰店",
-                is_official=True
-            ),
-            SearchResult(
-                title=f"{query} (拼多多百亿补贴通道)",
-                platform="拼多多",
-                platform_key="pdd",
-                item_id="pdd_search",
-                price=0.0,
-                final_price=0.0,
-                discount_tag="百亿补贴 / 点击直接前往对比",
-                url=f"https://mobile.yangkeduo.com/search_result.html?search_key={enc}",
-                image_url="",
-                shop_name="拼多多品牌专区",
-                is_official=True
-            )
-        ]
