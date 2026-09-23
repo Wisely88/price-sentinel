@@ -166,17 +166,41 @@
                 class="px-2.5 py-1 rounded-lg border font-medium transition-all shrink-0 flex items-center gap-1">
                 <span>拼多多百亿补贴</span>
               </button>
+
+              <!-- National Retail / Pure Retail Safeguard Toggle Button -->
+              <button 
+                type="button"
+                @click="toggleOnlyNational"
+                :class="onlyNational ? 'bg-emerald-50 text-emerald-700 border-emerald-300 font-semibold shadow-2xs' : 'bg-zinc-100 text-zinc-500 border-zinc-200'"
+                class="px-2.5 py-1 rounded-lg border text-xs transition-all shrink-0 flex items-center gap-1.5"
+                :title="searchData?.is_digital_search ? '已过滤以旧换新抵扣价与美版海外版，只展示全新国行正品' : '已过滤二手转让，只展示全新正品直购'">
+                <svg v-if="onlyNational" class="w-3.5 h-3.5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                <svg v-else class="w-3.5 h-3.5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+                <span>{{ searchData?.is_digital_search ? (onlyNational ? '全新国行直购' : '全部版本(含美版/换新)') : (onlyNational ? '纯净正品直购' : '显示全部(含二手)') }}</span>
+              </button>
             </div>
             
             <div class="hidden sm:flex items-center gap-3 text-zinc-400 text-xs">
-              <span class="flex items-center gap-1">
-                <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                已剔除竞价广告
-              </span>
-              <span class="flex items-center gap-1">
-                <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                已过滤配件陷阱
-              </span>
+              <template v-if="searchData?.is_digital_search">
+                <span class="flex items-center gap-1">
+                  <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  已过滤以旧换新
+                </span>
+                <span class="flex items-center gap-1">
+                  <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  已过滤美版/海外版
+                </span>
+              </template>
+              <template v-else>
+                <span class="flex items-center gap-1">
+                  <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  已剔除竞价广告
+                </span>
+                <span class="flex items-center gap-1">
+                  <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  已过滤配件陷阱
+                </span>
+              </template>
             </div>
           </div>
         </div>
@@ -190,7 +214,7 @@
             <div>
               <div class="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-indigo-600">全网检测最低价</div>
               <div class="text-xs sm:text-sm text-zinc-700 font-medium">
-                对比 {{ searchData.total_count }} 款真实渠道结果，最高立省 
+                对比全网 <span class="font-bold text-zinc-900">{{ searchData.total_count }}</span> 款真实渠道结果（当前筛选展示 <span class="text-indigo-600 font-bold">{{ displayedItems.length }}/{{ filteredItems.length }}</span> 款），最高立省 
                 <span class="text-rose-600 font-bold text-sm sm:text-base">¥{{ searchData.max_savings }}</span>
               </div>
             </div>
@@ -200,10 +224,104 @@
           </div>
         </div>
 
+        <!-- Transparent Price & Spec Notice Banner -->
+        <div v-if="searchData && searchData.items.length > 0" class="bg-emerald-50/80 border border-emerald-200 rounded-xl px-3.5 py-2.5 text-xs text-emerald-900 flex items-start gap-2 shadow-xs">
+          <svg class="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+          <div v-if="searchData.is_digital_search" class="leading-relaxed">
+            <span class="font-semibold text-emerald-950">全网防坑哨兵保障：</span>
+            已自动开启<strong class="text-emerald-900 font-bold">【全新国行直购】</strong>模式，全面剔除需寄回旧机的以旧换新抵扣假低价，及无国内双卡/全国联保的美版海外版。若遇商家限时补贴变价，可随时点击卡片下方<strong class="text-indigo-900 font-bold">「搜同款」</strong>一键比对全平台所有在售自营现货。
+          </div>
+          <div v-else class="leading-relaxed">
+            <span class="font-semibold text-emerald-950">全网纯净比价保障：</span>
+            已自动剔除竞价广告推广与周边配件陷阱，按各电商平台真实到手价由低到高排列。点击<strong class="text-indigo-900 font-bold">「直达」</strong>前往对应促销，点击<strong class="text-indigo-900 font-bold">「搜同款」</strong>可在平台查看更多在售店铺。
+          </div>
+        </div>
+
+        <!-- Dynamic Filter & Sort Toolbar -->
+        <div v-if="searchData && searchData.items.length > 0" class="bg-white rounded-xl border border-zinc-200 p-3 sm:p-3.5 space-y-2.5 shadow-2xs">
+          <!-- Spec / Capacity Filter Buttons -->
+          <div v-if="searchData.available_specs && searchData.available_specs.length > 0" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 text-xs">
+            <span class="font-medium text-zinc-400 shrink-0 mr-1">规格筛选:</span>
+            <button 
+              type="button"
+              @click="selectedSpec = '全部'"
+              :class="selectedSpec === '全部' ? 'bg-indigo-600 text-white font-bold shadow-xs' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'"
+              class="px-2.5 py-1 rounded-lg transition-all shrink-0 cursor-pointer">
+              全部
+            </button>
+            <button 
+              v-for="spec in searchData.available_specs"
+              :key="spec"
+              type="button"
+              @click="selectedSpec = spec"
+              :class="selectedSpec === spec ? 'bg-indigo-600 text-white font-bold shadow-xs' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'"
+              class="px-2.5 py-1 rounded-lg transition-all shrink-0 cursor-pointer">
+              {{ spec }}
+            </button>
+          </div>
+
+          <!-- Platform Tab & Sort Row -->
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-zinc-100 text-xs">
+            <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+              <span class="font-medium text-zinc-400 shrink-0 mr-1">渠道筛选:</span>
+              <button 
+                type="button"
+                @click="selectedPlatformTab = 'all'"
+                :class="selectedPlatformTab === 'all' ? 'bg-zinc-900 text-white font-bold' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'"
+                class="px-2.5 py-1 rounded-lg transition-all shrink-0 cursor-pointer">
+                全部 ({{ searchData.items.length }})
+              </button>
+              <button 
+                v-if="searchData.platform_counts?.jd"
+                type="button"
+                @click="selectedPlatformTab = 'jd'"
+                :class="selectedPlatformTab === 'jd' ? 'bg-red-600 text-white font-bold' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'"
+                class="px-2.5 py-1 rounded-lg transition-all shrink-0 cursor-pointer">
+                京东 ({{ searchData.platform_counts.jd }})
+              </button>
+              <button 
+                v-if="searchData.platform_counts?.taobao"
+                type="button"
+                @click="selectedPlatformTab = 'taobao'"
+                :class="selectedPlatformTab === 'taobao' ? 'bg-amber-600 text-white font-bold' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'"
+                class="px-2.5 py-1 rounded-lg transition-all shrink-0 cursor-pointer">
+                天猫/淘宝 ({{ searchData.platform_counts.taobao }})
+              </button>
+              <button 
+                v-if="searchData.platform_counts?.pdd"
+                type="button"
+                @click="selectedPlatformTab = 'pdd'"
+                :class="selectedPlatformTab === 'pdd' ? 'bg-rose-600 text-white font-bold' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'"
+                class="px-2.5 py-1 rounded-lg transition-all shrink-0 cursor-pointer">
+                拼多多 ({{ searchData.platform_counts.pdd }})
+              </button>
+            </div>
+
+            <!-- Sort selector -->
+            <div class="flex items-center gap-1.5 shrink-0 ml-auto">
+              <span class="font-medium text-zinc-400">排序:</span>
+              <button 
+                type="button"
+                @click="sortBy = 'price_asc'"
+                :class="sortBy === 'price_asc' ? 'text-indigo-600 font-bold bg-indigo-50 border-indigo-200' : 'text-zinc-600 border-zinc-200 hover:bg-zinc-50'"
+                class="px-2 py-0.5 rounded-md border text-[11px] transition-all cursor-pointer">
+                价格由低到高
+              </button>
+              <button 
+                type="button"
+                @click="sortBy = 'latest'"
+                :class="sortBy === 'latest' ? 'text-indigo-600 font-bold bg-indigo-50 border-indigo-200' : 'text-zinc-600 border-zinc-200 hover:bg-zinc-50'"
+                class="px-2 py-0.5 rounded-md border text-[11px] transition-all cursor-pointer">
+                最新优惠
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Search Results Grid (Responsive for Phone, Tablet, PC) -->
-        <div v-if="searchData && searchData.items.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+        <div v-if="filteredItems.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           <div 
-            v-for="(item, index) in searchData.items" 
+            v-for="(item, index) in displayedItems" 
             :key="index"
             :class="item.is_lowest ? 'ring-2 ring-emerald-500 shadow-md bg-white' : 'bg-white'"
             class="rounded-2xl p-4 sm:p-5 border border-zinc-200 hover:border-zinc-300 transition-all flex flex-col justify-between relative group">
@@ -216,9 +334,9 @@
 
             <!-- Content Area: Image + Details -->
             <div>
-              <!-- Platform & Official Badges -->
+              <!-- Platform & Official & Version Badges -->
               <div class="flex items-center justify-between mb-2.5">
-                <div class="flex items-center gap-1.5">
+                <div class="flex items-center gap-1.5 flex-wrap">
                   <span 
                     :class="{
                       'bg-red-50 text-red-700 border-red-200': item.platform_key === 'jd',
@@ -232,8 +350,26 @@
                   <span v-if="item.is_official" class="text-[10px] sm:text-xs px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 font-medium">
                     自营/官旗
                   </span>
+                  <!-- Version Badge (National / Overseas / Trade-in) -->
+                  <span 
+                    v-if="item.version_badge"
+                    :class="{
+                      'bg-emerald-50 text-emerald-700 border-emerald-200': item.version_badge === '国行全新',
+                      'bg-orange-50 text-orange-700 border-orange-200 font-bold': item.version_badge.includes('海外') || item.version_badge.includes('美版'),
+                      'bg-amber-50 text-amber-700 border-amber-200 font-bold': item.version_badge.includes('换新'),
+                      'bg-zinc-100 text-zinc-700 border-zinc-200': item.version_badge.includes('二手')
+                    }"
+                    class="text-[10px] sm:text-xs px-1.5 py-0.5 rounded-md font-semibold border">
+                    {{ item.version_badge }}
+                  </span>
+                  <span v-if="item.spec" class="text-[10px] sm:text-xs px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700 font-semibold border border-purple-200">
+                    {{ item.spec }}
+                  </span>
                 </div>
-                <span class="text-[11px] sm:text-xs text-zinc-400 truncate max-w-[120px]">{{ item.shop_name }}</span>
+                <span v-if="item.publish_time" class="text-[10px] sm:text-xs text-zinc-400 shrink-0" :title="'爆料更新时间: ' + item.publish_time">
+                  {{ item.publish_time }}
+                </span>
+                <span v-else class="text-[11px] sm:text-xs text-zinc-400 truncate max-w-[120px]">{{ item.shop_name }}</span>
               </div>
 
               <!-- Media layout on Mobile & Desktop -->
@@ -251,10 +387,13 @@
                     <a :href="item.url" target="_blank" rel="noopener noreferrer">{{ item.title }}</a>
                   </h3>
                   
-                  <!-- Discount / Coupon Tag -->
-                  <div class="mt-2 flex items-center gap-1">
-                    <span class="text-[10px] sm:text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600 font-normal truncate max-w-full">
+                  <!-- Discount / Coupon Tag & Condition Note -->
+                  <div class="mt-2 flex flex-wrap items-center gap-1.5">
+                    <span v-if="item.discount_tag" class="text-[10px] sm:text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600 font-normal truncate max-w-full">
                       {{ item.discount_tag }}
+                    </span>
+                    <span v-if="item.price_note" class="text-[10px] sm:text-xs px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200/60 font-medium">
+                      {{ item.price_note }}
                     </span>
                   </div>
                 </div>
@@ -273,28 +412,40 @@
                     ¥{{ item.price }}
                   </span>
                 </div>
+                <div v-if="item.spec" class="text-[10px] sm:text-xs text-zinc-400">
+                  以选定配置为准
+                </div>
               </div>
 
-              <!-- Action Buttons (Thumb friendly) -->
-              <div class="grid grid-cols-3 gap-1.5 sm:gap-2">
+              <!-- Action Buttons (Thumb friendly, 2x2 grid on mobile, 4-col on desktop) -->
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2">
                 <a 
                   :href="item.url" 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  class="col-span-1 py-2 sm:py-2.5 px-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl text-xs font-medium transition-all shadow-sm flex items-center justify-center gap-1 text-center">
-                  <span>直达</span>
+                  class="py-2 px-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl text-xs font-medium transition-all shadow-sm flex items-center justify-center gap-1 text-center" title="直接前往该爆料优惠页面">
+                  <span>直达优惠</span>
                   <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                </a>
+
+                <a 
+                  :href="item.platform_search_url || item.url" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  class="py-2 px-2 bg-indigo-50/80 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1 text-center" title="在对应平台实时搜索该商品全部在售现货">
+                  <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                  <span>搜同款</span>
                 </a>
 
                 <button 
                   @click="copyLink(item.url)"
-                  class="col-span-1 py-2 sm:py-2.5 px-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1 text-center" title="复制原始无追踪直达链接">
+                  class="py-2 px-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1 text-center" title="复制原始无追踪直达链接">
                   <span>复制</span>
                 </button>
                 
                 <button 
                   @click="openAddFavoriteModal(item)"
-                  class="col-span-1 py-2 sm:py-2.5 px-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1 text-center">
+                  class="py-2 px-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1 text-center">
                   <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
                   <span>监控</span>
                 </button>
@@ -302,6 +453,33 @@
             </div>
 
           </div>
+        </div>
+
+        <!-- Load More / Progressive Pagination Controls -->
+        <div v-if="filteredItems.length > displayLimit" class="text-center py-4 space-y-2">
+          <button 
+            @click="loadMore" 
+            type="button"
+            class="w-full sm:w-auto px-8 py-3 bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white font-semibold text-sm rounded-xl shadow-sm transition-all inline-flex items-center justify-center gap-2 cursor-pointer">
+            <span>加载更多优惠结果 (还有 {{ filteredItems.length - displayLimit }} 款)</span>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+          <div>
+            <button 
+              @click="showAll" 
+              type="button"
+              class="text-xs text-indigo-600 hover:text-indigo-800 font-medium py-1 px-3 rounded hover:bg-indigo-50 transition-colors cursor-pointer">
+              一键展开全部 (共 {{ filteredItems.length }} 款)
+            </button>
+          </div>
+        </div>
+        <div v-else-if="filteredItems.length > 18" class="text-center text-xs text-zinc-400 py-3">
+          已展示全部 {{ filteredItems.length }} 条有效促销对比
+        </div>
+        
+        <!-- Filter Empty State -->
+        <div v-if="searchData && searchData.items.length > 0 && filteredItems.length === 0" class="text-center py-8 bg-zinc-50 rounded-xl border border-zinc-200">
+          <p class="text-xs text-zinc-500">当前所选规格或渠道下暂无匹配结果，请尝试切换规格或点击「全部」查看</p>
         </div>
 
         <!-- Direct Channels Quick Jump Banner -->

@@ -1,15 +1,22 @@
+"""
+Database Layer / 数据库持久化层
+Manages SQLite storage for monitored favorites, historical price tracking, and system alert settings.
+管理 SQLite 数据库存储，包含商品降价监控清单、历史价格走势记录及系统告警通知配置。
+"""
+
 import sqlite3
 from datetime import datetime
 from typing import List, Dict, Optional, Any
 from config import DB_PATH
 
 def get_db():
+    """Get database connection with dict-like row access / 获取支持字典式访问的数据库连接"""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 def init_db():
-    """Initialize database tables."""
+    """Initialize database tables / 初始化数据库数据表结构"""
     with get_db() as conn:
         cursor = conn.cursor()
         

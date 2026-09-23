@@ -1,3 +1,10 @@
+"""
+PriceSentinel FastAPI Application / 主应用入口
+Exposes RESTful endpoints for real-time price comparison, favorite monitoring,
+and alerting configuration.
+提供跨平台实时比价、降价监控清单管理及多通道告警配置的 RESTful 接口。
+"""
+
 from fastapi import FastAPI, HTTPException, Query, Body
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -74,10 +81,15 @@ def health():
 @app.get("/api/search")
 async def search(
     q: str = Query(..., description="搜索关键词"),
-    platforms: Optional[str] = Query(None, description="逗号分隔的平台列表: jd,taobao,pdd")
+    platforms: Optional[str] = Query(None, description="逗号分隔的平台列表: jd,taobao,pdd"),
+    only_national: bool = Query(True, description="仅看全新国行直购（过滤以旧换新/海外版/二手）")
 ):
     target_platforms = [p.strip() for p in platforms.split(",")] if platforms else None
-    results = await search_service.search_all(query=q, platforms=target_platforms)
+    results = await search_service.search_all(
+        query=q, 
+        platforms=target_platforms,
+        only_national_retail=only_national
+    )
     return results
 
 @app.get("/api/favorites")

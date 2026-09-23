@@ -1,3 +1,9 @@
+"""
+Background Price Sentinel Scheduler / 后台降价巡检调度器
+Periodically checks monitored items via APScheduler and triggers multi-channel alerts upon price drops.
+使用 APScheduler 定时自动轮询监控列表中的商品，并在检测到破价或新优惠时触发多通道推送。
+"""
+
 import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger

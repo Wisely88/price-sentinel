@@ -1,4 +1,4 @@
-const { createApp, ref, reactive, onMounted } = Vue;
+const { createApp, ref, reactive, onMounted, computed } = Vue;
 
 createApp({
   setup() {
@@ -9,6 +9,12 @@ createApp({
     const searchData = ref(null);
     const favorites = ref([]);
     const testingNotify = ref(false);
+
+    // Dynamic filtering and pagination for large result sets
+    const displayLimit = ref(18);
+    const selectedSpec = ref('全部');
+    const selectedPlatformTab = ref('all');
+    const sortBy = ref('price_asc');
 
     const hotTags = [
       'iPhone 16',
@@ -64,6 +70,56 @@ createApp({
       }
     };
 
+    const onlyNational = ref(true);
+
+    const toggleOnlyNational = () => {
+      onlyNational.value = !onlyNational.value;
+      if (searchQuery.value.trim()) {
+        executeSearch();
+      }
+    };
+
+    // Filter and sort items dynamically
+    const filteredItems = computed(() => {
+      if (!searchData.value || !searchData.value.items) return [];
+      let list = [...searchData.value.items];
+
+      // 1. Spec filter
+      if (selectedSpec.value && selectedSpec.value !== '全部') {
+        list = list.filter(item => (item.spec || '').toUpperCase() === selectedSpec.value);
+      }
+
+      // 2. Platform tab filter
+      if (selectedPlatformTab.value && selectedPlatformTab.value !== 'all') {
+        list = list.filter(item => item.platform_key === selectedPlatformTab.value);
+      }
+
+      // 3. Sorting
+      if (sortBy.value === 'price_asc') {
+        list.sort((a, b) => a.final_price - b.final_price);
+      } else if (sortBy.value === 'price_desc') {
+        list.sort((a, b) => b.final_price - a.final_price);
+      } else if (sortBy.value === 'latest') {
+        list.sort((a, b) => (b.publish_time || '').localeCompare(a.publish_time || ''));
+      } else if (sortBy.value === 'savings') {
+        list.sort((a, b) => ((b.price || b.final_price) - b.final_price) - ((a.price || a.final_price) - a.final_price));
+      }
+
+      return list;
+    });
+
+    const displayedItems = computed(() => {
+      return filteredItems.value.slice(0, displayLimit.value);
+    });
+
+    const loadMore = () => {
+      displayLimit.value += 18;
+    };
+
+    const showAll = () => {
+      displayLimit.value = 9999;
+    };
+
     // --- Search Logic ---
     const executeSearch = async () => {
       const q = searchQuery.value.trim();
@@ -71,6 +127,10 @@ createApp({
 
       loadingSearch.value = true;
       searchData.value = null;
+      displayLimit.value = 18;
+      selectedSpec.value = '全部';
+      selectedPlatformTab.value = 'all';
+      sortBy.value = 'price_asc';
 
       const platforms = [];
       if (selectedPlatforms.jd) platforms.push('jd');
@@ -78,7 +138,7 @@ createApp({
       if (selectedPlatforms.pdd) platforms.push('pdd');
 
       try {
-        const url = `/api/search?q=${encodeURIComponent(q)}&platforms=${platforms.join(',')}`;
+        const url = `/api/search?q=${encodeURIComponent(q)}&platforms=${platforms.join(',')}&only_national=${onlyNational.value}`;
         const res = await fetch(url);
         if (!res.ok) throw new Error('Search failed');
         const data = await res.json();
@@ -275,6 +335,16 @@ createApp({
       toast,
       favoriteModal,
       testingNotify,
+      onlyNational,
+      toggleOnlyNational,
+      displayLimit,
+      selectedSpec,
+      selectedPlatformTab,
+      sortBy,
+      filteredItems,
+      displayedItems,
+      loadMore,
+      showAll,
       executeSearch,
       searchByTag,
       clearSearch,

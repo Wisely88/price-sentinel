@@ -1,3 +1,10 @@
+"""
+Search Aggregator Service / 比价聚合检索服务
+Coordinates concurrent connectors, conducts anomaly baseline price checks,
+filters trade-in and grey-market lures, and performs smart multi-platform deduplication.
+并发调用多源比价连接器，执行官方自营基准价异常校验、以旧换新/水货诱导拦截，并实现跨平台多规格智能保留去重。
+"""
+
 import asyncio
 from typing import List, Dict, Any, Optional
 from urllib.parse import quote
@@ -20,7 +27,8 @@ class SearchService:
         self, 
         query: str, 
         platforms: Optional[List[str]] = None,
-        limit_per_platform: int = 15
+        limit_per_platform: int = 50,
+        only_national_retail: bool = True
     ) -> Dict[str, Any]:
         clean_kw = query.strip()
         if not clean_kw:
@@ -32,8 +40,15 @@ class SearchService:
                 "max_savings": 0.0,
                 "items": [],
                 "platform_counts": {},
-                "direct_channels": []
+                "direct_channels": [],
+                "available_specs": [],
+                "only_national_retail": only_national_retail
             }
+
+        # User explicit intent flags
+        want_trade_in = any(k in clean_kw.lower() for k in ["以旧换新", "换新", "回收"])
+        want_overseas = any(k in clean_kw.lower() for k in ["美版", "美行", "日版", "日行", "港版", "港行", "海外", "水货", "卡贴"])
+        want_refurbished = any(k in clean_kw.lower() for k in ["二手", "官翻", "99新", "95新", "拆封"])
 
         # 1. Concurrently query real price sources
         tasks = [
@@ -49,33 +64,80 @@ class SearchService:
         all_items: List[SearchResult] = []
         platform_counts: Dict[str, int] = {"jd": 0, "taobao": 0, "pdd": 0, "other": 0}
 
-        # Deduplication tracker by normalized title
-        seen_titles = set()
+        # Smart deduplication: never drop different platforms, different specs, or different prices
+        seen_urls = set()
+        seen_listing_keys = set()
 
         for res in raw_results:
             if isinstance(res, list):
                 for item in res:
                     if item.final_price <= 0:
                         continue
-                    # Deduplicate closely matching titles
-                    norm_title = "".join(item.title.split())[:25].lower()
-                    if norm_title in seen_titles:
+
+                    # 1. Deduplicate identical clean URL
+                    clean_u = item.url.split("?")[0].rstrip("/").lower() if item.url else ""
+                    if clean_u and clean_u in seen_urls:
                         continue
-                    seen_titles.add(norm_title)
+
+                    # 2. Deduplicate exact same listing from same platform & shop with same price and spec
+                    shop_clean = (item.shop_name or "").strip()
+                    spec_clean = (item.spec or "").strip().upper()
+                    price_rounded = round(item.final_price, 0)
+                    listing_key = (item.platform_key, shop_clean, spec_clean, price_rounded)
+                    if listing_key in seen_listing_keys:
+                        continue
 
                     # Filter by requested platforms if specified
                     if platforms:
-                        # Allow matching if platform_key is in requested platforms
                         if item.platform_key not in platforms and "other" not in platforms:
-                            # If user selected jd and item is jd
                             continue
+
+                    if clean_u:
+                        seen_urls.add(clean_u)
+                    seen_listing_keys.add(listing_key)
 
                     all_items.append(item)
                     key = item.platform_key if item.platform_key in platform_counts else "other"
                     platform_counts[key] = platform_counts.get(key, 0) + 1
 
-        # Sort strictly by final price ascending (cheapest first)
-        all_items.sort(key=lambda x: (x.final_price, not x.is_official))
+        # 2. 旗舰大件数码官方基准价与非国行/换新异常偏离拦截
+        is_main_device = any(m in clean_kw.lower() for m in ["iphone", "ipad", "mac", "手机", "笔记本", "电脑", "相机", "显卡", "电视"])
+        if is_main_device:
+            official_prices = [it.final_price for it in all_items if it.is_official and it.final_price > 1000]
+            if official_prices:
+                official_baseline = min(official_prices)
+                for it in all_items:
+                    # 若第三方非官方专营店价格大幅低于自营基准价 (>15%)，且标题无明确国行/双卡保证，自动打标为疑似海外版/需换新
+                    if not it.is_official and it.final_price < official_baseline * 0.85:
+                        if "国行" not in it.title and "双卡" not in it.title:
+                            it.is_overseas = True
+                            it.version_badge = "⚠️专营店低价(疑似美版/需换新)"
+                            if "疑似美版" not in it.price_note:
+                                it.price_note = ("⚠️远低于自营/疑似美版或需换新 · " + it.price_note).strip(" · ")
+
+        # 3. 全新国行直购模式过滤 (纯净模式)
+        if only_national_retail:
+            filtered_items = []
+            for it in all_items:
+                if not want_trade_in and it.is_trade_in:
+                    continue
+                if not want_overseas and it.is_overseas:
+                    continue
+                if not want_refurbished and it.is_refurbished:
+                    continue
+                filtered_items.append(it)
+            # 若全部过滤空了，降级保留全部并展示预警
+            if filtered_items:
+                all_items = filtered_items
+
+        # 4. 排序规则：排除换新/海外后，按最终到手价由低到高排列（同价位官方自营优先）
+        all_items.sort(key=lambda x: (
+            x.is_trade_in,
+            x.is_overseas,
+            x.is_refurbished,
+            x.final_price,
+            not x.is_official
+        ))
 
         min_price = all_items[0].final_price if all_items else 0.0
         max_price = max((it.final_price for it in all_items), default=0.0)
@@ -104,6 +166,14 @@ class SearchService:
             }
         ]
 
+        # Collect available specs for frontend filtering
+        specs_set = set()
+        for it in all_items:
+            if it.spec:
+                specs_set.add(it.spec.upper())
+        # Sort specs (e.g. 128G < 256G < 512G < 1TB)
+        available_specs = sorted(list(specs_set))
+
         return {
             "query": clean_kw,
             "total_count": len(all_items),
@@ -112,6 +182,9 @@ class SearchService:
             "max_savings": max_savings,
             "platform_counts": platform_counts,
             "direct_channels": direct_channels,
+            "available_specs": available_specs,
+            "only_national_retail": only_national_retail,
+            "is_digital_search": is_main_device,
             "items": [self._serialize_result(item) for item in all_items]
         }
 
@@ -128,5 +201,13 @@ class SearchService:
             "image_url": item.image_url,
             "shop_name": item.shop_name,
             "is_official": item.is_official,
-            "is_lowest": item.is_lowest
+            "is_lowest": item.is_lowest,
+            "spec": item.spec,
+            "price_note": item.price_note,
+            "publish_time": item.publish_time,
+            "platform_search_url": item.platform_search_url,
+            "is_trade_in": item.is_trade_in,
+            "is_overseas": item.is_overseas,
+            "is_refurbished": item.is_refurbished,
+            "version_badge": item.version_badge
         }

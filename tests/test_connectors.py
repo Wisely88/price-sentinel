@@ -52,3 +52,76 @@ def test_search_service_aggregation():
             assert items[i]["final_price"] <= items[i+1]["final_price"]
         # Lowest item should be marked
         assert items[0]["is_lowest"] is True
+
+def test_spec_extraction():
+    connector = BaseConnector()
+    assert connector.extract_spec("Apple iPhone 18 Pro 256GB 勃艮第酒红色") == "256GB"
+    assert connector.extract_spec("Apple iPhone 18 Pro 512G 冰川蓝") == "512GB"
+    assert connector.extract_spec("Apple iPhone 18 Pro Max 1TB 黑色") == "1TB"
+    assert connector.extract_spec("Apple iPhone 18 Pro 256手机") == "256GB"
+    assert connector.extract_spec("iPhone 16 官方标配 全新国行") == "官方标配"
+    assert connector.extract_spec("普通无规格描述商品") == ""
+
+def test_platform_search_url_generation():
+    connector = BaseConnector()
+    jd_url = connector.get_platform_search_url("jd", "Apple iPhone 18 Pro 256GB")
+    assert "search.jd.com" in jd_url
+    assert "iPhone" in jd_url
+
+    tb_url = connector.get_platform_search_url("taobao", "Apple iPhone 18 Pro 256GB")
+    assert "s.taobao.com" in tb_url
+
+    pdd_url = connector.get_platform_search_url("pdd", "Apple iPhone 18 Pro 256GB")
+    assert "yangkeduo.com" in pdd_url
+
+def test_price_extraction_not_tricked_by_installments():
+    from app.connectors.smzdm import SMZDMConnector
+    from app.connectors.mmb import MMBConnector
+    
+    smzdm = SMZDMConnector()
+    mmb = MMBConnector()
+
+    # Installment strings without currency unit should NEVER be parsed as price
+    assert smzdm._extract_price("白条12期免息") == 0.0
+    assert mmb._extract_price("白条12期免息 无需抢") == 0.0
+
+    # Proper price patterns should be parsed accurately
+    assert smzdm._extract_price("8949元") == 8949.0
+    assert smzdm._extract_price("券后8949元") == 8949.0
+    assert smzdm._extract_price("到手价8949") == 8949.0
+    assert mmb._extract_price("9299.02元+199.98元淘金币（含国补，晒单返20元后到手9279.02元）") == 9279.02
+
+def test_version_detection():
+    connector = BaseConnector()
+    
+    # Trade-in
+    is_ti, is_os, is_rf, badge = connector.detect_version("Apple iPhone 18 Pro 以旧换新立减800")
+    assert is_ti is True
+    assert badge == "需以旧换新"
+
+    # Overseas / US
+    is_ti, is_os, is_rf, badge = connector.detect_version("Apple iPhone 17 Pro 美版无锁 256G")
+    assert is_os is True
+    assert badge == "海外/美版"
+
+    # Refurbished
+    is_ti, is_os, is_rf, badge = connector.detect_version("Apple iPhone 16 Pro 99新 官翻二手")
+    assert is_rf is True
+    assert badge == "二手官翻"
+
+    # Pure National Retail (Digital product)
+    is_ti, is_os, is_rf, badge = connector.detect_version("Apple iPhone 18 Pro 256GB 勃艮第酒红色 国行正品双卡", "iPhone 18 Pro")
+    assert is_ti is False
+    assert is_os is False
+    assert is_rf is False
+    assert badge == "国行全新"
+
+    # Non-digital regular product (e.g. coffee beans, tissue paper, shampoo) -> should NOT be 国行全新
+    is_ti, is_os, is_rf, badge = connector.detect_version("菲诺 花魁SOE埃塞俄比亚日晒G1咖啡豆200g", "咖啡豆")
+    assert badge == ""
+
+    # Non-digital imported product -> should be 原装进口
+    is_ti, is_os, is_rf, badge = connector.detect_version("A2 澳大利亚原装进口全脂纯牛奶 1L*6箱装", "纯牛奶")
+    assert badge == "原装进口"
+
+

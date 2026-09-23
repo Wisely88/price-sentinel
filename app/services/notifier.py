@@ -1,3 +1,9 @@
+"""
+Multi-Channel Notification Dispatcher / 多通道告警通知分发器
+Supports native macOS desktop notifications, iOS Bark push, and generic Webhooks.
+支持 macOS 原生桌面弹窗通知、iOS 移动端 Bark 实时推送及通用 Webhook（企微/飞书/钉钉）机器人分发。
+"""
+
 import subprocess
 import httpx
 from typing import Optional, Dict, Any

@@ -53,3 +53,15 @@ def test_favorites_api():
     # Clean up favorite
     del_res = client.delete(f"/api/favorites/{fav_id}")
     assert del_res.status_code == 200
+
+def test_search_api_structure():
+    # Test search endpoint returns expected data structures
+    res = client.get("/api/search?q=iPhone&only_national=true")
+    assert res.status_code == 200
+    data = res.json()
+    assert "total_count" in data
+    assert "items" in data
+    assert "available_specs" in data
+    assert "direct_channels" in data
+    assert isinstance(data["items"], list)
+    assert isinstance(data["available_specs"], list)
