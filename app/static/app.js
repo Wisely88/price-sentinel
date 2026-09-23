@@ -4,10 +4,20 @@ createApp({
   setup() {
     const currentTab = ref('search');
     const searchQuery = ref('');
+    const searchInput = ref(null);
     const loadingSearch = ref(false);
     const searchData = ref(null);
     const favorites = ref([]);
     const testingNotify = ref(false);
+
+    const hotTags = [
+      'iPhone 16',
+      '索尼 WH-1000XM5',
+      'iPad Air',
+      '飞利浦电动牙刷',
+      '任天堂 Switch',
+      '戴森吹风机'
+    ];
 
     const selectedPlatforms = reactive({
       jd: true,
@@ -74,13 +84,44 @@ createApp({
         const data = await res.json();
         searchData.value = data;
         if (data.items.length === 0) {
-          showToast('未找到匹配商品，建议换一个关键词');
+          showToast('未在特惠库中找到即时促销，已为您生成官方检索通道');
         }
       } catch (err) {
         console.error(err);
         showToast('比价请求异常，请检查网络');
       } finally {
         loadingSearch.value = false;
+      }
+    };
+
+    const searchByTag = (tag) => {
+      searchQuery.value = tag;
+      executeSearch();
+    };
+
+    const clearSearch = () => {
+      searchQuery.value = '';
+      if (searchInput.value) {
+        searchInput.value.focus();
+      }
+    };
+
+    const copyLink = async (url) => {
+      if (!url) return;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(url);
+        } else {
+          const textarea = document.createElement('textarea');
+          textarea.value = url;
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textarea);
+        }
+        showToast('已复制纯净直达链接到剪贴板！');
+      } catch (e) {
+        showToast('复制失败，请长按链接复制');
       }
     };
 
@@ -206,23 +247,38 @@ createApp({
       }
     };
 
+    // Keyboard shortcut helper
+    const handleKeydown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        currentTab.value = 'search';
+        if (searchInput.value) searchInput.value.focus();
+      }
+    };
+
     onMounted(() => {
       loadFavorites();
       loadSettings();
+      window.addEventListener('keydown', handleKeydown);
     });
 
     return {
       currentTab,
       searchQuery,
+      searchInput,
       loadingSearch,
       searchData,
       selectedPlatforms,
+      hotTags,
       favorites,
       settings,
       toast,
       favoriteModal,
       testingNotify,
       executeSearch,
+      searchByTag,
+      clearSearch,
+      copyLink,
       loadFavorites,
       openAddFavoriteModal,
       confirmAddFavorite,
