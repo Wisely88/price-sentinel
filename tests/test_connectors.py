@@ -124,4 +124,24 @@ def test_version_detection():
     is_ti, is_os, is_rf, badge = connector.detect_version("A2 澳大利亚原装进口全脂纯牛奶 1L*6箱装", "纯牛奶")
     assert badge == "原装进口"
 
+def test_search_result_is_ended_field():
+    item = SearchResult(
+        title="Apple iPhone 16 Pro Max 256GB",
+        platform="京东自营",
+        platform_key="jd",
+        item_id="10001",
+        price=8999.0,
+        final_price=7999.0,
+        discount_tag="历史特惠参考",
+        url="https://item.jd.com/10001.html",
+        image_url="",
+        shop_name="京东自营",
+        is_ended=True
+    )
+    assert item.is_ended is True
+    service = SearchService()
+    serialized = service._serialize_result(item)
+    assert serialized["is_ended"] is True
+    assert serialized["final_price"] == 7999.0
+
 

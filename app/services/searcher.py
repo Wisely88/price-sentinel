@@ -50,6 +50,11 @@ class SearchService:
         want_overseas = any(k in clean_kw.lower() for k in ["美版", "美行", "日版", "日行", "港版", "港行", "海外", "水货", "卡贴"])
         want_refurbished = any(k in clean_kw.lower() for k in ["二手", "官翻", "99新", "95新", "拆封"])
 
+        import re
+        main_indicators = ["iphone", "ipad", "mac", "手机", "笔记本", "电脑", "相机", "显卡", "电视", "华为", "小米", "荣耀", "vivo", "oppo"]
+        is_main_device = any(m in clean_kw.lower() for m in main_indicators)
+        has_capacity = bool(re.search(r"\b(128|256|512|1t|1tb|64)\b", clean_kw, re.IGNORECASE))
+
         # 1. Concurrently query real price sources
         tasks = [
             self.smzdm.search(clean_kw, limit=limit_per_platform),
@@ -58,6 +63,11 @@ class SearchService:
             self.taobao.search(clean_kw, limit=5),
             self.pdd.search(clean_kw, limit=5)
         ]
+
+        # 数码大件在未指定规格时，并发扩展搜索主力容量规格（如 256），绕过配件刷屏并提升有效商品条数
+        if is_main_device and not has_capacity:
+            tasks.append(self.smzdm.search(f"{clean_kw} 256", limit=limit_per_platform))
+            tasks.append(self.mmb.search(f"{clean_kw} 256", limit=limit_per_platform))
 
         raw_results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -209,5 +219,6 @@ class SearchService:
             "is_trade_in": item.is_trade_in,
             "is_overseas": item.is_overseas,
             "is_refurbished": item.is_refurbished,
-            "version_badge": item.version_badge
+            "version_badge": item.version_badge,
+            "is_ended": item.is_ended
         }

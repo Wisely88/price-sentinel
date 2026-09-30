@@ -95,15 +95,14 @@ class SMZDMConnector(BaseConnector):
                         if article_id:
                             seen_article_ids.add(article_id)
 
-                        # 1. 严格过滤已失效、已超时、已售罄的过期优惠
+                        # 1. 标记是否已结束或售罄（保留近期历史底价作为参考基准，避免0搜索结果）
                         is_timeout = row.get("article_is_timeout") in (1, "1", True)
                         is_sold_out = row.get("article_is_sold_out") in (1, "1", True)
-                        if is_timeout or is_sold_out:
-                            continue
+                        is_ended = bool(is_timeout or is_sold_out)
 
                         raw_title = row.get("article_title", "")
                         title = self.clean_title(raw_title)
-                        if not title or "广告" in title or "失效" in title or "已结束" in title:
+                        if not title or "广告" in title:
                             continue
 
                         # 2. 过滤配件低价陷阱
@@ -133,6 +132,8 @@ class SMZDMConnector(BaseConnector):
 
                         # 7. 价格生效条件/优惠说明
                         notes = []
+                        if is_ended:
+                            notes.append("近期好价(活动已结束)")
                         if is_trade_in:
                             notes.append("需以旧换新")
                         if is_overseas:
@@ -163,7 +164,9 @@ class SMZDMConnector(BaseConnector):
                         pub_time = row.get("article_format_date") or row.get("article_date", "")
 
                         discount_tag = raw_price
-                        if "需用券" in raw_price:
+                        if is_ended:
+                            discount_tag = "历史特惠参考 / 已结束"
+                        elif "需用券" in raw_price:
                             discount_tag = "需用券 / 领券直减"
                         elif "需用国补" in raw_price or "补贴" in raw_price:
                             discount_tag = "国家补贴 / 平台限时补贴"
@@ -189,7 +192,8 @@ class SMZDMConnector(BaseConnector):
                             is_trade_in=is_trade_in,
                             is_overseas=is_overseas,
                             is_refurbished=is_refurbished,
-                            version_badge=version_badge
+                            version_badge=version_badge,
+                            is_ended=is_ended
                         ))
         except Exception as e:
             print(f"[SMZDMConnector] Search error for '{query}': {e}")

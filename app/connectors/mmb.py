@@ -107,10 +107,9 @@ class MMBConnector(BaseConnector):
                             raw_title = t_m.group(1) if t_m else ""
                             title = self.clean_title(raw_title)
                             
-                            # 1. 严格过滤已结束或失效的爆料
-                            if "DiscountItemPC_itemOver" in raw or "已结束" in raw or "已失效" in raw:
-                                continue
-                            if not title or "广告" in title or "失效" in title or "已结束" in title:
+                            # 1. 检测是否为已结束活动（保留近期好价作为比价基准参考，避免0搜索结果）
+                            is_ended = ("DiscountItemPC_itemOver" in raw or "已结束" in raw or "已失效" in raw or "已售罄" in raw)
+                            if not title or "广告" in title:
                                 continue
                             if title.startswith("促销活动") or "速抢" in title or "会场" in title:
                                 continue
@@ -144,6 +143,8 @@ class MMBConnector(BaseConnector):
 
                             # 7. 价格生效条件/优惠说明提取
                             notes = []
+                            if is_ended:
+                                notes.append("近期好价(活动已结束)")
                             if is_trade_in:
                                 notes.append("需以旧换新")
                             if is_overseas:
@@ -169,6 +170,8 @@ class MMBConnector(BaseConnector):
                             # 8. 标签与链接
                             tag_m = re.search(r"DiscountItemPC_itemTag.*?children\":\"(.*?)\"", raw)
                             tag = tag_m.group(1) if tag_m else price_str
+                            if is_ended:
+                                tag = tag or "历史特惠参考"
 
                             time_m = re.search(r"DiscountItemPC_itemTime.*?children\":\"(.*?)\"", raw)
                             pub_time = time_m.group(1) if time_m else ""
@@ -200,7 +203,8 @@ class MMBConnector(BaseConnector):
                                 is_trade_in=is_trade_in,
                                 is_overseas=is_overseas,
                                 is_refurbished=is_refurbished,
-                                version_badge=version_badge
+                                version_badge=version_badge,
+                                is_ended=is_ended
                             ))
 
                     if results:

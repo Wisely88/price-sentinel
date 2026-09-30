@@ -33,6 +33,7 @@ class SearchResult:
     is_overseas: bool = False
     is_refurbished: bool = False
     version_badge: str = ""
+    is_ended: bool = False
 
 class BaseConnector:
     name: str = "Base"

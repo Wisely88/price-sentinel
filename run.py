@@ -54,7 +54,7 @@ def print_banner(host: str, port: int, lan_ip: str):
 def main():
     lan_ip = get_local_ip()
     print_banner(HOST, PORT, lan_ip)
-    uvicorn.run("app.main:app", host=HOST, port=PORT, log_level="info", access_log=False)
+    uvicorn.run("app.main:app", host=HOST, port=PORT, log_level="info", access_log=True)
 
 if __name__ == "__main__":
     main()
